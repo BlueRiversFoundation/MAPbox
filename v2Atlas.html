@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>AMBER Atlas & Tracker 2.0</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        /* Botón para abrir/cerrar en móvil */
+        .menu-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: #14748f;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            display: block;
+        }
+
+        .filter-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.98);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            width: 270px;
+            max-height: 85vh;
+            overflow-y: auto;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .filter-panel.hidden {
+            transform: translateX(320px);
+        }
+
+        .source-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px 4px;
+            border: 2px solid #14748f;
+            background: white;
+            color: #14748f;
+            border-radius: 5px;
+            font-weight: 800;
+            cursor: pointer;
+            font-size: 11px;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .tab-btn.active {
+            background: #14748f;
+            color: white;
+        }
+
+        .filter-panel h3 {
+            margin: 15px 0 8px 0;
+            font-size: 12px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 3px;
+            color: #14748f;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+
+        .selector-style {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: inherit;
+        }
+
+        .layer-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .layer-item input {
+            margin-right: 12px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .color-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: inline-block;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        /* Zoom controls */
+        .zoom-controls {
+            position: absolute;
+            right: 14px;
+            bottom: 80px;
+            z-index: 120;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .zoom-btn {
+            width: 52px;
+            height: 52px;
+            border-radius: 10px;
+            background: white;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+            font-size: 20px;
+            font-weight: 800;
+            color: #14748f;
+            cursor: pointer;
+        }
+
+
+        @media (max-width: 600px) {
+            .menu-toggle {
+                display: block;
+            }
+
+            .zoom-controls {
+                display: flex;
+            }
+
+            .filter-panel {
+                width: 240px;
+                top: 70px;
+                right: 20px;
+            }
+
+        }
+    </style>
+</head>
+
+<body>
+
+    <button class="menu-toggle" id="toggle-btn">MENU ☰</button>
+
+    <div id="map"></div>
+
+    <div class="zoom-controls" id="zoom-controls">
+        <button class="zoom-btn" id="zoom-in">+</button>
+        <button class="zoom-btn" id="zoom-out">-</button>
+        <button class="zoom-btn" id="center-app">📍</button>
+    </div>
+
+    <div class="filter-panel hidden" id="side-panel">
+        <h3>SELECT DATABASE</h3>
+        <div class="source-tabs">
+            <button class="tab-btn active" id="btn-atlas">AMBER ATLAS</button>
+            <button class="tab-btn" id="btn-tracker">AMBER BARRIER TRACKER</button>
+        </div>
+
+        <h3>GO TO COUNTRY</h3>
+        <select id="country-fly" class="selector-style">
+            <option value="15,50,3.5">SHOW ALL EUROPE</option>
+            <option value="20.1,41.1,7">ALBANIA</option>
+            <option value="14.5,47.5,7">AUSTRIA</option>
+            <option value="4.4,50.5,7">BELGIUM</option>
+            <option value="17.6,43.9,7">BOSNIA AND HERZ.</option>
+            <option value="25.4,42.7,7">BULGARIA</option>
+            <option value="15.2,44.4,7">CROATIA</option>
+            <option value="15.4,49.8,7">CZECH REPUBLIC</option>
+            <option value="9.5,56.2,7">DENMARK</option>
+            <option value="25.0,58.5,7">ESTONIA</option>
+            <option value="25.7,61.9,6">FINLAND</option>
+            <option value="2.2,46.2,6">FRANCE</option>
+            <option value="10.4,51.1,6">GERMANY</option>
+            <option value="21.8,39.0,7">GREECE</option>
+            <option value="19.5,47.1,7">HUNGARY</option>
+            <option value="-8.2,53.4,7">IRELAND</option>
+            <option value="12.5,41.8,6">ITALY</option>
+            <option value="24.6,56.8,7">LATVIA</option>
+            <option value="23.8,55.1,7">LITHUANIA</option>
+            <option value="5.2,52.1,7">NETHERLANDS</option>
+            <option value="8.4,60.4,6">NORWAY</option>
+            <option value="19.1,51.9,6">POLAND</option>
+            <option value="-8.2,39.4,7">PORTUGAL</option>
+            <option value="24.9,45.9,7">ROMANIA</option>
+            <option value="21.0,44.0,7">SERBIA</option>
+            <option value="19.6,48.6,7">SLOVAKIA</option>
+            <option value="14.9,46.1,8">SLOVENIA</option>
+            <option value="-3.7,40.4,6">SPAIN</option>
+            <option value="18.6,60.1,5">SWEDEN</option>
+            <option value="8.2,46.8,8">SWITZERLAND</option>
+            <option value="-3.4,55.3,6">UNITED KINGDOM</option>
+        </select>
+
+        <h3>BARRIER TYPES</h3>
+        <label class="layer-item"><input type="checkbox" class="layer-check" data-kw="dam" checked> <span
+                class="color-dot" style="background-color: #4eb58c;"></span> Dams</label>
+        <label class="layer-item"><input type="checkbox" class="layer-check" data-kw="weir" checked> <span
+                class="color-dot" style="background-color: #2689c4;"></span> Weirs</label>
+        <label class="layer-item"><input type="checkbox" class="layer-check" data-kw="culvert" checked> <span
+                class="color-dot" style="background-color: #ffee66;"></span> Culverts</label>
+        <label class="layer-item"><input type="checkbox" class="layer-check" data-kw="ford" checked> <span
+                class="color-dot" style="background-color: #d6713d;"></span> Fords</label>
+        <label class="layer-item"><input type="checkbox" class="layer-check" data-kw="sluice" checked> <span
+                class="color-dot" style="background-color: #d62d2d;"></span> Sluices</label>
+        <label class="layer-item"><input type="checkbox" class="layer-check" data-kw="ramp" checked> <span
+                class="color-dot" style="background-color: #9b47f5;"></span> Ramps</label>
+        <label class="layer-item"><input type="checkbox" class="layer-check" data-kw="other" checked> <span
+                class="color-dot" style="background-color: #ffffff; border: 1px solid #ccc;"></span> Other /
+            Unknown</label>
+    </div>
+
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoiYWRlbGFicmYiLCJhIjoiY21tZGx2N2lmMDR2MDJzczhnY21yaXd1eSJ9.9ay_Wl2pUcB2fMvpsKdjLQ';
+
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/adelabrf/cmmdpbnsa00hf01qz30s2ar6a',
+            center: [15, 50], zoom: 3.5
+        });
+
+        // Valeur de zoom par défaut utilisée quand l'app n'en fournit pas
+        const DEFAULT_ZOOM = 14;
+
+        // Fonctions exposées pour l'application native :
+        // window.setView(lat, lng, zoom)  -> stocke la position envoyée par l'app (ne fait pas de fly)
+        window.setView = function (lat, lng, zoom) {
+            const store = () => {
+                const z = (typeof zoom === 'number' && !isNaN(zoom)) ? parseFloat(zoom) : DEFAULT_ZOOM;
+                // store last coords received from app without moving the map
+                window._lastAppCoords = { lat: parseFloat(lat), lng: parseFloat(lng), zoom: z };
+            };
+            if (map && map.loaded && map.loaded()) store(); else map.once('load', store);
+        };
+
+        // applyLastAppView() : effectue le flyTo en utilisant les dernières coords reçues
+        window.applyLastAppView = function () {
+            const c = window._lastAppCoords;
+            if (!c || c.lat == null || c.lng == null) return;
+            const doFly = () => map.flyTo({ center: [parseFloat(c.lng), parseFloat(c.lat)], zoom: parseFloat(c.zoom || DEFAULT_ZOOM), essential: true });
+            if (map && map.loaded && map.loaded()) doFly(); else map.once('load', doFly);
+        };
+
+        // window.setViewFromApp(payload) : accepte objet JS ou JSON string { lat, lng, zoom }
+        window.setViewFromApp = function (payload) {
+            try {
+                const obj = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+                if (obj && obj.lat != null && obj.lng != null) {
+                    window.setView(obj.lat, obj.lng, obj.zoom);
+                }
+            } catch (e) { console.error('setViewFromApp error', e); }
+        };
+
+        let currentSource = 'atlas';
+        let selectedCountryName = "";
+
+        const toggleBtn = document.getElementById('toggle-btn');
+        const sidePanel = document.getElementById('side-panel');
+
+        toggleBtn.addEventListener('click', () => {
+            sidePanel.classList.toggle('hidden');
+            toggleBtn.innerText = sidePanel.classList.contains('hidden') ? 'MENU ☰' : 'CLOSE ✖';
+        });
+
+        function refreshMap() {
+            const activeKws = Array.from(document.querySelectorAll('.layer-check:checked')).map(c => c.dataset.kw);
+            const style = map.getStyle();
+            if (!style) return;
+
+            style.layers.forEach(layer => {
+                if (layer.type === 'circle') {
+                    const id = layer.id.toLowerCase();
+                    const isBT = id.includes('tracker');
+                    let visible = (currentSource === 'atlas' && !isBT) || (currentSource === 'tracker' && isBT);
+
+                    if (visible && !isBT) {
+                        const match = activeKws.some(kw => id.includes(kw));
+                        if (!match && !id.includes('unkn')) visible = false;
+                    }
+
+                    map.setLayoutProperty(layer.id, 'visibility', visible ? 'visible' : 'none');
+
+                    if (visible) {
+                        let filter = ['all'];
+                        if (!isBT && selectedCountryName !== "" && selectedCountryName !== "SHOW ALL EUROPE") {
+                            filter.push(['any', ['==', ['upcase', ['get', 'Country']], selectedCountryName], ['==', ['upcase', ['get', 'country']], selectedCountryName]]);
+                        }
+                        if (isBT) {
+                            filter.push(['any', ...activeKws.map(kw => ['==', ['downcase', ['get', 'type']], kw])]);
+                        }
+                        map.setFilter(layer.id, filter.length > 1 ? filter : null);
+                    }
+                }
+            });
+        }
+
+        map.on('load', () => {
+            document.getElementById('btn-atlas').onclick = () => {
+                currentSource = 'atlas';
+                document.getElementById('btn-atlas').classList.add('active');
+                document.getElementById('btn-tracker').classList.remove('active');
+                refreshMap();
+            };
+            document.getElementById('btn-tracker').onclick = () => {
+                currentSource = 'tracker';
+                document.getElementById('btn-tracker').classList.add('active');
+                document.getElementById('btn-atlas').classList.remove('active');
+                refreshMap();
+            };
+            document.querySelectorAll('.layer-check').forEach(c => c.onchange = refreshMap);
+            document.getElementById('country-fly').onchange = (e) => {
+                const val = e.target.value.split(',');
+                selectedCountryName = e.target.options[e.target.selectedIndex].text.toUpperCase();
+                map.flyTo({ center: [parseFloat(val[0]), parseFloat(val[1])], zoom: parseFloat(val[2]), essential: true });
+                if (window.innerWidth < 600) { sidePanel.classList.add('hidden'); toggleBtn.innerText = 'MENU ☰'; }
+                refreshMap();
+            };
+            refreshMap();
+
+            // Zoom buttons handlers
+            const zi = document.getElementById('zoom-in');
+            const zo = document.getElementById('zoom-out');
+            const centerBtn = document.getElementById('center-app');
+            if (zi && zo) {
+                zi.addEventListener('click', () => map.zoomIn({ duration: 300 }));
+                zo.addEventListener('click', () => map.zoomOut({ duration: 300 }));
+            }
+            if (centerBtn) {
+                centerBtn.addEventListener('click', () => {
+                    const c = window._lastAppCoords;
+                    if (c && c.lat != null && c.lng != null) {
+                        window.applyLastAppView();
+                    } else {
+                        // user-friendly feedback
+                        alert('No coordinates received from the app yet.');
+                    }
+                });
+            }
+
+            // Build popup HTML from feature properties
+            function makePopupContent(props) {
+                let html = '<div style="font-size:13px;line-height:1.3">';
+                const keys = Object.keys(props || {});
+                if (keys.length === 0) {
+                    html += '<div>No properties</div>';
+                } else {
+                    keys.forEach(k => {
+                        const v = props[k];
+                        if (v == null || v === '') return;
+                        html += '<div><strong>' + k + ':</strong> ' + String(v) + '</div>';
+                    });
+                }
+                html += '</div>';
+                return html;
+            }
+
+            // Attach click + hover handlers to all circle layers (POI)
+            const styleLayers = (map.getStyle() && map.getStyle().layers) || [];
+            styleLayers.forEach(layer => {
+                if (layer.type === 'circle') {
+                    try {
+                        map.on('click', layer.id, (e) => {
+                            const feature = e.features && e.features[0];
+                            if (!feature) return;
+                            const coords = (feature.geometry && feature.geometry.coordinates) ? feature.geometry.coordinates.slice() : [e.lngLat.lng, e.lngLat.lat];
+                            const props = feature.properties || {};
+                            const html = makePopupContent(props);
+                            new mapboxgl.Popup({ offset: 12 }).setLngLat(coords).setHTML(html).addTo(map);
+                        });
+
+                        map.on('mouseenter', layer.id, () => { map.getCanvas().style.cursor = 'pointer'; });
+                        map.on('mouseleave', layer.id, () => { map.getCanvas().style.cursor = ''; });
+                    } catch (err) {
+                        console.error('Error attaching handlers to layer', layer.id, err);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
