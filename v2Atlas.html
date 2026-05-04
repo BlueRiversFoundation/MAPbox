@@ -479,16 +479,10 @@
             }
             if (centerBtn) {
                 centerBtn.addEventListener('click', () => {
-                    if (window._userCoords && window._userCoords.lat != null && window._userCoords.lng != null) {
-                        window.centerOnUser();
-                    } else {
-                        const c = window._lastAppCoords;
-                        if (c && c.lat != null && c.lng != null) {
-                            window.applyLastAppView();
-                        } else {
-                            alert("Aucune position utilisateur ni coordonnées d'application disponibles.");
-                        }
-                    }
+                    // Demande à l'application native la position actuelle.
+                    // L'app native doit intercepter `app://get-user-location`, obtenir le GPS
+                    // et répondre en appelant `window.centerFromApp({ lat:..., lng:..., zoom:... })`.
+                    clickPositionUser();
                 });
             }
 
@@ -546,9 +540,33 @@
                         el.style.border = '3px solid white';
                         el.style.boxShadow = '0 0 8px rgba(214,45,45,0.6)';
                         el.style.transform = 'translate(-50%, -50%)';
+                        // store coords on element for click handler
+                        el.dataset.lat = String(parseFloat(lat));
+                        el.dataset.lng = String(parseFloat(lng));
+
+                        // ensure marker element receives pointer/touch events and shows clickable cursor
+                        el.style.pointerEvents = 'auto';
+                        el.style.cursor = 'pointer';
+                        el.style.touchAction = 'manipulation';
+
+                        // click on the DOM marker should notify native as well (support click + touchstart)
+                        function notifyFromEl(ev) {
+                            try {
+                                if (ev && ev.stopPropagation) ev.stopPropagation();
+                                const p = JSON.stringify({ type: 'poiClick', lat: parseFloat(el.dataset.lat), lng: parseFloat(el.dataset.lng), props: {} });
+                                if (typeof window.notifyNativePayload === 'function') window.notifyNativePayload(p);
+                            } catch (e) { console.warn('poi marker click notify error', e); }
+                        }
+                        el.addEventListener('click', notifyFromEl);
+                        el.addEventListener('touchstart', function (ev) { ev.preventDefault(); notifyFromEl(ev); }, { passive: false });
+
                         window._poiMarker = new mapboxgl.Marker({ element: el }).setLngLat([parseFloat(lng), parseFloat(lat)]).addTo(map);
                     } else {
                         window._poiMarker.setLngLat([parseFloat(lng), parseFloat(lat)]);
+                        try {
+                            const el = window._poiMarker.getElement();
+                            if (el) { el.dataset.lat = String(parseFloat(lat)); el.dataset.lng = String(parseFloat(lng)); }
+                        } catch (e) { }
                     }
                 };
                 if (map && map.loaded && map.loaded()) createOrUpdate(); else map.once('load', createOrUpdate);
@@ -572,6 +590,20 @@
                         window.placePoiAndCenter(obj.lng, obj.lat, z);
                     }
                 } catch (e) { console.error('setPoiFromApp error', e); }
+            };
+
+            // utility to notify native app via standardized scheme
+            window.notifyNativePayload = function (jsonPayload) {
+                try { console.log('notifyNative payload', jsonPayload); } catch (e) { }
+                var schemeUrl = 'app://message?data=' + encodeURIComponent(jsonPayload);
+                try { window.location.href = schemeUrl; } catch (e) { console.warn('location.href app:// error', e); }
+                try {
+                    var ifr = document.createElement('iframe');
+                    ifr.style.display = 'none';
+                    ifr.src = schemeUrl;
+                    document.documentElement.appendChild(ifr);
+                    if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
+                } catch (e) { console.warn('iframe app:// error', e); }
             };
 
             map.on('click', (e) => {
@@ -604,30 +636,9 @@
 
                     try { if (typeof window._maybeUpdateCoordPanel === 'function') window._maybeUpdateCoordPanel(); } catch (e) { }
 
-                    // notify native app via custom url scheme (intercepted by MAUI WebView Navigating)
+                    // notify native app via standardized scheme (intercepted by MAUI WebView Navigating)
                     const payload = JSON.stringify({ type: 'poiClick', lat: parseFloat(lat), lng: parseFloat(lng), props: props });
-                    // send payload using custom-scheme navigation synchronously and an iframe fallback
-                    (function notifyNativeViaScheme(jsonPayload) {
-                        try { console.log('notifyNative payload', jsonPayload); } catch (e) { }
-
-                        // use standardized URI: app://message?data=<json>
-                        var schemeUrl = 'app://message?data=' + encodeURIComponent(jsonPayload);
-
-                        // Primary: navigate the top window to the custom scheme (will trigger WebView.Navigating)
-                        try { window.location.href = schemeUrl; } catch (e) { console.warn('location.href app:// error', e); }
-
-                        // Secondary: create a short-lived iframe as a backup (forces notification on some WebViews)
-                        try {
-                            var ifr = document.createElement('iframe');
-                            ifr.style.display = 'none';
-                            ifr.src = schemeUrl;
-                            document.documentElement.appendChild(ifr);
-                            // remove immediately to avoid polluting history/cache
-                            if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
-                        } catch (e) { console.warn('iframe app:// error', e); }
-
-                        // Note: we intentionally DO NOT rely on postMessage here so MAUI WebView.Navigating catches it.
-                    })(payload);
+                    if (typeof window.notifyNativePayload === 'function') window.notifyNativePayload(payload);
                 } catch (err) {
                     console.error('map click handler error', err);
                 }
@@ -663,6 +674,14 @@
                     window.location.href = 'app://' + encodeURIComponent(payload);
                 } catch (e) { console.warn('sendCoordsToApp error', e); }
             };
+
+            // Fonction liée à ton bouton "Ma Position" dans l'interface HTML
+            function clickPositionUser() {
+                // On envoie juste l'ordre, sans données, c'est le C# qui fera le boulot
+                try {
+                    window.location.href = "app://get-user-location";
+                } catch (e) { console.warn('clickPositionUser error', e); }
+            }
 
         });
     </script>
