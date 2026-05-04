@@ -606,32 +606,27 @@
 
                     // notify native app via custom url scheme (intercepted by MAUI WebView Navigating)
                     const payload = JSON.stringify({ type: 'poiClick', lat: parseFloat(lat), lng: parseFloat(lng), props: props });
-                    // robust native notify: try several channels and log for debugging
-                    (function notifyNative(jsonPayload) {
-                        try {
-                            console.log('notifyNative payload', jsonPayload);
-                        } catch (e) { }
+                    // send payload using custom-scheme navigation synchronously and an iframe fallback
+                    (function notifyNativeViaScheme(jsonPayload) {
+                        try { console.log('notifyNative payload', jsonPayload); } catch (e) { }
 
-                        // try modern WebView postMessage (WebView2 / Edge / WebKit variants)
-                        try {
-                            if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
-                                window.chrome.webview.postMessage(jsonPayload);
-                                return;
-                            }
-                        } catch (e) { console.warn('chrome.webview.postMessage error', e); }
+                        // use standardized URI: app://message?data=<json>
+                        var schemeUrl = 'app://message?data=' + encodeURIComponent(jsonPayload);
 
-                        try {
-                            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.external && typeof window.webkit.messageHandlers.external.postMessage === 'function') {
-                                window.webkit.messageHandlers.external.postMessage(jsonPayload);
-                                return;
-                            }
-                        } catch (e) { console.warn('webkit.messageHandlers.postMessage error', e); }
+                        // Primary: navigate the top window to the custom scheme (will trigger WebView.Navigating)
+                        try { window.location.href = schemeUrl; } catch (e) { console.warn('location.href app:// error', e); }
 
-                        // fallback: navigation to custom scheme (handled by MAUI WebView.Navigating)
+                        // Secondary: create a short-lived iframe as a backup (forces notification on some WebViews)
                         try {
-                            // use a short timeout to avoid interrupting other UI work (popups)
-                            setTimeout(function () { window.location.href = 'app://' + encodeURIComponent(jsonPayload); }, 20);
-                        } catch (e) { console.warn('fallback location change error', e); }
+                            var ifr = document.createElement('iframe');
+                            ifr.style.display = 'none';
+                            ifr.src = schemeUrl;
+                            document.documentElement.appendChild(ifr);
+                            // remove immediately to avoid polluting history/cache
+                            if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
+                        } catch (e) { console.warn('iframe app:// error', e); }
+
+                        // Note: we intentionally DO NOT rely on postMessage here so MAUI WebView.Navigating catches it.
                     })(payload);
                 } catch (err) {
                     console.error('map click handler error', err);
