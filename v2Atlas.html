@@ -508,6 +508,10 @@
             styleLayers.forEach(layer => {
                 if (layer.type === 'circle') {
                     try {
+
+
+                        //alert("1");
+
                         map.on('click', layer.id, (e) => {
                             const feature = e.features && e.features[0];
                             if (!feature) return;
@@ -609,7 +613,7 @@
             map.on('click', (e) => {
                 try {
 
-                    alert("click map"); // ← fenêtre native du navigateur
+                    alert("2"); // ← fenêtre native du navigateur
 
 
                     // try to get first rendered feature at point
