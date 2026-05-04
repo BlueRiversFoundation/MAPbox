@@ -553,7 +553,7 @@
                         function notifyFromEl(ev) {
                             try {
                                 if (ev && ev.stopPropagation) ev.stopPropagation();
-                                const p = JSON.stringify({ type: 'poiClick', lat: parseFloat(el.dataset.lat), lng: parseFloat(el.dataset.lng), props: {} });
+                                const p = String(parseFloat(el.dataset.lat)) + ',' + String(parseFloat(el.dataset.lng));
                                 if (typeof window.notifyNativePayload === 'function') window.notifyNativePayload(p);
                             } catch (e) { console.warn('poi marker click notify error', e); }
                         }
@@ -637,7 +637,8 @@
                     try { if (typeof window._maybeUpdateCoordPanel === 'function') window._maybeUpdateCoordPanel(); } catch (e) { }
 
                     // notify native app via standardized scheme (intercepted by MAUI WebView Navigating)
-                    const payload = JSON.stringify({ type: 'poiClick', lat: parseFloat(lat), lng: parseFloat(lng), props: props });
+                    // Send minimal payload: "lat,lng" (native should receive only these coords)
+                    const payload = String(parseFloat(lat)) + ',' + String(parseFloat(lng));
                     if (typeof window.notifyNativePayload === 'function') window.notifyNativePayload(payload);
                 } catch (err) {
                     console.error('map click handler error', err);
@@ -677,9 +678,19 @@
 
             // Fonction liée à ton bouton "Ma Position" dans l'interface HTML
             function clickPositionUser() {
-                // On envoie juste l'ordre, sans données, c'est le C# qui fera le boulot
                 try {
-                    window.location.href = "app://get-user-location";
+
+                    alert("demande"); // ← fenêtre native du navigateur
+
+                    var schemeUrl = 'app://get-user-location';
+                    try { window.location.href = schemeUrl; } catch (e) { console.warn('location.href app:// error', e); }
+                    try {
+                        var ifr = document.createElement('iframe');
+                        ifr.style.display = 'none';
+                        ifr.src = schemeUrl;
+                        document.documentElement.appendChild(ifr);
+                        if (ifr.parentNode) ifr.parentNode.removeChild(ifr);
+                    } catch (e) { console.warn('iframe app:// error', e); }
                 } catch (e) { console.warn('clickPositionUser error', e); }
             }
 
