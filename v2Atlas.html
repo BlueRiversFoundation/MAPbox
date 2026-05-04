@@ -608,6 +608,10 @@
 
             map.on('click', (e) => {
                 try {
+
+                    alert("click map"); // ← fenêtre native du navigateur
+
+
                     // try to get first rendered feature at point
                     const features = map.queryRenderedFeatures(e.point) || [];
                     let targetFeature = null;
